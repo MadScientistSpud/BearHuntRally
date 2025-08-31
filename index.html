@@ -1,0 +1,190 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whiteout Rally Calculator - Visual Preview</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: auto; }
+label { display: block; margin-top: 10px; }
+input[type=number] { width: 120px; margin-bottom: 5px; }
+input[type=range] { width: 100%; }
+button { margin-top: 15px; padding: 5px 10px; }
+table { border-collapse: collapse; margin-top: 15px; width: 100%; }
+th, td { border: 1px solid #ccc; padding: 5px; text-align: right; }
+h2 { margin-top: 20px; }
+.output { margin-top: 10px; }
+.bar-container { width: 100%; height: 30px; background: #eee; display: flex; margin-top: 10px; border-radius: 5px; overflow: hidden; }
+.bar-inf { background: #4CAF50; height: 100%; }
+.bar-lance { background: #2196F3; height: 100%; }
+.bar-marks { background: #FFC107; height: 100%; }
+.bar-labels { display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Whiteout Rally Calculator</h1>
+
+<label>Total Rally Size (Rally Cap):
+  <input type="number" id="rallySize" value="500000">
+  <input type="range" id="rallySlider" min="100000" max="2000000" step="10000" value="500000">
+</label>
+
+<label>Leader Troops:
+  <input type="number" id="leaderTroops" value="0">
+</label>
+
+<label>Number of Joiners:
+  <input type="number" id="numJoiners" value="5" min="1" max="14">
+  <input type="range" id="joinerSlider" min="1" max="14" step="1" value="5">
+</label>
+
+<label>Max Troops per Joiner (optional):
+  <input type="number" id="joinerCap" placeholder="Leave blank for no cap">
+</label>
+
+<label>Troop Template:
+  <select id="templateSelect">
+    <option value="custom">Custom Ratio</option>
+    <option value="maxMarks">Max Marksmen Template</option>
+  </select>
+</label>
+
+<div id="customRatios">
+  <label>Infantry Ratio (%):
+    <input type="number" id="infRatio" value="40">
+  </label>
+  <label>Lancers Ratio (%):
+    <input type="number" id="lanceRatio" value="20">
+  </label>
+  <label>Marksmen Ratio (%):
+    <input type="number" id="marksRatio" value="40">
+  </label>
+</div>
+
+<h2>Troop Composition Preview</h2>
+<div class="bar-container">
+  <div class="bar-inf" id="barInf"></div>
+  <div class="bar-lance" id="barLance"></div>
+  <div class="bar-marks" id="barMarks"></div>
+</div>
+<div class="bar-labels">
+  <span>Infantry</span><span>Lancers</span><span>Marksmen</span>
+</div>
+
+<button onclick="calculateRally()">Calculate</button>
+<button onclick="copyResults()">Copy to Clipboard</button>
+
+<div id="results" class="output"></div>
+
+<script>
+const templateSelect = document.getElementById('templateSelect');
+const customRatiosDiv = document.getElementById('customRatios');
+const rallySizeInput = document.getElementById('rallySize');
+const rallySlider = document.getElementById('rallySlider');
+const joinersInput = document.getElementById('numJoiners');
+const joinerSlider = document.getElementById('joinerSlider');
+
+const barInf = document.getElementById('barInf');
+const barLance = document.getElementById('barLance');
+const barMarks = document.getElementById('barMarks');
+
+templateSelect.addEventListener('change', () => {
+    customRatiosDiv.style.display = templateSelect.value === 'custom' ? 'block' : 'none';
+    calculateRally();
+});
+
+rallySizeInput.addEventListener('input', () => { rallySlider.value = rallySizeInput.value; calculateRally(); });
+rallySlider.addEventListener('input', () => { rallySizeInput.value = rallySlider.value; calculateRally(); });
+joinersInput.addEventListener('input', () => { joinerSlider.value = joinersInput.value; calculateRally(); });
+joinerSlider.addEventListener('input', () => { joinersInput.value = joinerSlider.value; calculateRally(); });
+
+function roundClean(num) {
+    if (num < 1000) return Math.round(num);
+    return Math.round(num / 1000) * 1000;
+}
+
+function calculateRally() {
+    let rallySize = parseInt(rallySizeInput.value);
+    const leaderTroops = parseInt(document.getElementById("leaderTroops").value);
+    let numJoiners = parseInt(joinersInput.value);
+    let joinerCap = document.getElementById("joinerCap").value;
+    joinerCap = joinerCap ? parseInt(joinerCap) : Infinity;
+
+    if(rallySize <= leaderTroops){
+        document.getElementById("results").innerHTML = "<p>Error: Leader troops exceed or equal rally size.</p>";
+        return;
+    }
+
+    const remaining = rallySize - leaderTroops;
+
+    let infRatio, lanceRatio, marksRatio;
+    if(templateSelect.value === 'custom'){
+        infRatio = parseFloat(document.getElementById("infRatio").value) / 100;
+        lanceRatio = parseFloat(document.getElementById("lanceRatio").value) / 100;
+        marksRatio = parseFloat(document.getElementById("marksRatio").value) / 100;
+    } else { // maxMarks
+        let maxJoinerTotal = remaining / numJoiners;
+        if(maxJoinerTotal > joinerCap) maxJoinerTotal = joinerCap;
+        infRatio = 1000 / maxJoinerTotal;
+        lanceRatio = 5000 / maxJoinerTotal;
+        marksRatio = 1 - infRatio - lanceRatio;
+    }
+
+    let perJoinerTotal = remaining / numJoiners;
+    if(perJoinerTotal > joinerCap) perJoinerTotal = joinerCap;
+    const maxPossibleJoiners = Math.floor(remaining / perJoinerTotal);
+    if(numJoiners > maxPossibleJoiners){
+        numJoiners = maxPossibleJoiners;
+        joinersInput.value = numJoiners;
+        joinerSlider.value = numJoiners;
+    }
+
+    const totalInf = remaining * infRatio;
+    const totalLance = remaining * lanceRatio;
+    const totalMarks = remaining * marksRatio;
+
+    const perJoinerInf = roundClean(totalInf / numJoiners);
+    const perJoinerLance = roundClean(totalLance / numJoiners);
+    const perJoinerMarks = roundClean(totalMarks / numJoiners);
+
+    const totalRemainingInf = perJoinerInf * numJoiners;
+    const totalRemainingLance = perJoinerLance * numJoiners;
+    const totalRemainingMarks = perJoinerMarks * numJoiners;
+
+    // Update composition bars
+    const total = totalRemainingInf + totalRemainingLance + totalRemainingMarks;
+    barInf.style.width = (totalRemainingInf / total * 100) + '%';
+    barLance.style.width = (totalRemainingLance / total * 100) + '%';
+    barMarks.style.width = (totalRemainingMarks / total * 100) + '%';
+
+    let output = `<h2>Joiner Troops per Person</h2>
+    <table>
+    <tr><th>Type</th><th>Per Joiner</th><th>Total Joiners</th></tr>
+    <tr><td>Infantry</td><td>${perJoinerInf}</td><td>${totalRemainingInf}</td></tr>
+    <tr><td>Lancers</td><td>${perJoinerLance}</td><td>${totalRemainingLance}</td></tr>
+    <tr><td>Marksmen</td><td>${perJoinerMarks}</td><td>${totalRemainingMarks}</td></tr>
+    </table>`;
+
+    const totalRally = leaderTroops + totalRemainingInf + totalRemainingLance + totalRemainingMarks;
+    output += `<p>Total rally size including leader: ${roundClean(totalRally)}</p>`;
+
+    document.getElementById("results").innerHTML = output;
+}
+
+function copyResults() {
+    const resultsText = document.getElementById("results").innerText;
+    navigator.clipboard.writeText(resultsText).then(() => {
+        alert("Rally template copied to clipboard!");
+    }, () => {
+        alert("Failed to copy. Please select and copy manually.");
+    });
+}
+
+// Initial calculation
+calculateRally();
+</script>
+
+</body>
+</html>
